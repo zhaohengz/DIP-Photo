@@ -137,14 +137,14 @@
      </rect>
     </property>
     <layout class="QGridLayout" name="gridLayout_2">
-     <item row="0" column="2">
-      <widget class="QPushButton" name="pushButtonHistogramMatch">
+     <item row="2" column="1">
+      <widget class="QPushButton" name="loadImage">
        <property name="text">
-        <string>直方图匹配</string>
+        <string>载入</string>
        </property>
       </widget>
      </item>
-     <item row="1" column="2">
+     <item row="2" column="2">
       <widget class="QPushButton" name="reset">
        <property name="text">
         <string>重置</string>
@@ -158,10 +158,24 @@
        </property>
       </widget>
      </item>
-     <item row="1" column="1">
-      <widget class="QPushButton" name="loadImage">
+     <item row="0" column="2">
+      <widget class="QPushButton" name="pushButtonHistogramMatch">
        <property name="text">
-        <string>载入</string>
+        <string>直方图匹配</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QPushButton" name="pushButtonPoisson">
+       <property name="text">
+        <string>泊松融合</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="2">
+      <widget class="QPushButton" name="pushButtonStitch">
+       <property name="text">
+        <string>图像拼接</string>
        </property>
       </widget>
      </item>
