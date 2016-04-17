@@ -3,6 +3,7 @@
 #include <QMessageBox>
 #include <QString>
 #include <iostream>
+#include <fstream>
 #include <ctime>
 
 using namespace cv;
@@ -313,6 +314,20 @@ void Photoshop::contrastStretch()
 	contrastStretch(ui.spinBoxMinContrast->value(), ui.spinBoxMaxContrast->value());
 }
 
+void Photoshop::maskMerge(cv::Mat& des, cv::Mat& src, cv::Mat& mask)
+{
+	for (int i = 0; i < des.rows; i++)
+	{
+		for (int j = 0; j < des.cols; j++)
+		{
+			if (mask.at<unsigned char>(i, j) != 0)
+			{
+				des.at<Vec3b>(i, j) = src.at<Vec3b>(i, j);
+			}
+		}
+	}
+}
+
 void Photoshop::poissonMatting()
 {
 	QString candidate_name = QFileDialog::getOpenFileName(this, tr("选择图像"), "", tr("Images (*.png *.jpg *.jpeg *.bmp)"));
@@ -369,16 +384,14 @@ void Photoshop::poissonMatting()
 		Mat dest, destGradientX, destGradientY;
 		Mat patchGradientX, patchGradientY;
 		_image_show(cv::Rect(Point(x, y), Point(x + candidate->cols, y + candidate->rows))).copyTo(dest);
+
 		patchGradientX = Mat(candidate->size(), CV_8UC3);
 		patchGradientY = Mat(candidate->size(), CV_8UC3);
 		destGradientX = Mat(dest.size(), CV_8UC3);
 		destGradientY = Mat(dest.size(), CV_8UC3);
 		Mat test = _image_show.clone();
 		computeGradientX(_image_show, test);
-		imshow("test", test);
-		cvWaitKey(0);
-		cvDestroyAllWindows();
-		
+
 		computeGradientX(*candidate, patchGradientX);
 		computeGradientY(*candidate, patchGradientY);
 		computeGradientX(dest, destGradientX);
@@ -386,38 +399,49 @@ void Photoshop::poissonMatting()
 
 		Mat laplacianX = destGradientX.clone();
 		Mat laplacianY = destGradientY.clone();
-		patchGradientX.copyTo(laplacianX, binMask);
-		patchGradientY.copyTo(laplacianY, binMask);
+		maskMerge(laplacianX, patchGradientX, binMask);
+		maskMerge(laplacianY, patchGradientY, binMask);
+
 
 		computeLaplacianX(laplacianX, laplacianX);
 		computeLaplacianY(laplacianY, laplacianY);
 
 		Mat lap = laplacianX + laplacianY;
-		Mat ans = dest.clone();
+		Mat ans(dest.size(), CV_8UC3);
 		int pixNum = dest.rows * dest.cols;
+
+		imshow("lap", lap);
+		cvWaitKey(0);
+		cvDestroyAllWindows();
 
 		double* columnB = new double[pixNum];
 		double* pX = new double[pixNum];
 
 		cout << pixNum << endl;
+		ofstream A("A.txt");
 		Eigen::SparseMatrix<float> smA(pixNum, pixNum);
+
 		for (int i = 0; i < dest.rows; i++)
 		{
 			for (int j = 0; j < dest.cols; j++)
 			{
 				int place = i * dest.cols + j;
-				if (i == 0 || j == 0 || i == dest.rows - 1 || j == dest.cols - 1)
+				if ((i == 0) || (j == 0) || (i == (dest.rows - 1)) || (j == (dest.cols - 1)))
 				{
 					smA.insert(place, place) = 1;
 					continue;
 				}
 				smA.insert(place, place) = -4;
-				smA.insert(place, (i - 1) * dest.cols + j) = 1;
-				smA.insert(place, (i + 1) * dest.cols + j) = 1;
-				smA.insert(place, i * dest.cols + j - 1) = 1;
-				smA.insert(place, i * dest.cols + j + 1) = 1;
+				smA.insert(place, place + dest.cols) = 1;
+				smA.insert(place, place - dest.cols) = 1;
+				smA.insert(place, place + 1) = 1;
+				smA.insert(place, place - 1) = 1;
 			}
 		}
+		//A << smA << endl;
+
+		//ofstream B("B.txt");
+		ofstream X("X.txt");
 		smA.makeCompressed();
 		for (int k = 0; k < 3; k++)
 		{
@@ -426,16 +450,19 @@ void Photoshop::poissonMatting()
 				for (int j = 0; j < dest.cols; j++)
 				{
 					int place = i * dest.cols + j;
-					if (i == 0 || j == 0 || i == dest.rows - 1 || j == dest.cols - 1)
+					if ((i == 0) || (j == 0) || (i == (dest.rows - 1)) || (j == (dest.cols - 1)))
 					{
 						columnB[place] = dest.at<Vec3b>(i, j).val[k];
+						//B << columnB[place] << endl;
 						continue;
 					}
 					columnB[place] = lap.at<Vec3b>(i, j).val[k];
+					//B << columnB[place] << endl;
+
 				}
 			}
 			cout << (int)time(NULL) << endl;
-			SolveLinearSystemByEigenQR(smA, columnB, pX, pixNum, pixNum);
+			SolveLinearSystemByEigen(smA, columnB, pX, pixNum, pixNum);
 			cout << (int)time(NULL) << endl;
 
 			for (int i = 0; i < dest.rows; i++)
@@ -443,7 +470,8 @@ void Photoshop::poissonMatting()
 				for (int j = 0; j < dest.cols; j++)
 				{
 					int place = i * dest.cols + j;
-					ans.at<Vec3b>(i, j).val[k] = pX[place];
+					ans.at<Vec3b>(i, j).val[k] = min(max(0, (int)pX[place]), 255);
+					X << pX[place] << endl;
 				}
 			}
 		}
@@ -458,49 +486,49 @@ void Photoshop::poissonMatting()
 	}
 }
 
-void Photoshop::computeGradientX(Mat& img, Mat& gradient)
+void Photoshop::computeGradientX(const Mat& img, Mat& gradient)
 {
 	Mat kernel = Mat::zeros(1, 3, CV_8S);
 	kernel.at<char>(0, 2) = 1;
 	kernel.at<char>(0, 1) = -1;
-	filter2D(img, gradient, CV_8UC3, kernel);
+	filter2D(img, gradient, CV_8U, kernel);
 }
 
-void Photoshop::computeGradientY(Mat& img, Mat& gradient)
+void Photoshop::computeGradientY(const Mat& img, Mat& gradient)
 {
 	Mat kernel = Mat::zeros(3, 1, CV_8S);
 	kernel.at<char>(2, 0) = 1;
 	kernel.at<char>(1, 0) = -1;
-	filter2D(img, gradient, CV_8UC3, kernel);
+	filter2D(img, gradient, CV_8U, kernel);
 }
 
-void Photoshop::computeLaplacianX(cv::Mat & img, cv::Mat & laplacian)
+void Photoshop::computeLaplacianX(const cv::Mat & img, cv::Mat & laplacian)
 {
 	Mat kernel = Mat::zeros(1, 3, CV_8S);
 	kernel.at<char>(0, 0) = -1;
 	kernel.at<char>(0, 1) = 1;
-	filter2D(img, laplacian, CV_8UC3, kernel);
+	filter2D(img, laplacian, CV_8U, kernel);
 }
 
-void Photoshop::computeLaplacianY(cv::Mat & img, cv::Mat & laplacian)
+void Photoshop::computeLaplacianY(const cv::Mat & img, cv::Mat & laplacian)
 {
 	Mat kernel = Mat::zeros(3, 1, CV_8S);
 	kernel.at<char>(0, 0) = -1;
 	kernel.at<char>(1, 0) = 1;
-	filter2D(img, laplacian, CV_8UC3, kernel);
+	filter2D(img, laplacian, CV_8U, kernel);
 }
 
-int Photoshop::SolveLinearSystemByEigenQR(Eigen::SparseMatrix<float>& smA, double* pColumnB, double* pX, int m_nRow, int m_nColumn)
+int Photoshop::SolveLinearSystemByEigen(Eigen::SparseMatrix<float>& smA, double* pColumnB, double* pX, int m_nRow, int m_nColumn)
 {
 
-	Eigen::SparseQR<Eigen::SparseMatrix<float>, Eigen::COLAMDOrdering<int>> linearSolver;
-	linearSolver.compute(smA);
-
+	Eigen::SparseLU<Eigen::SparseMatrix<float>> linearSolver(smA);
+	
 	Eigen::VectorXf vecB(m_nRow);
 	for (int i = 0; i < m_nRow; ++i)
 	{
 		vecB[i] = pColumnB[i];
 	}
+
 	Eigen::VectorXf vecX = linearSolver.solve(vecB);
 
 	for (int i = 0; i < m_nColumn; ++i)
