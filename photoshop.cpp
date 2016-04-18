@@ -29,7 +29,7 @@ void poisson_on_mouse(int event, int x, int y, int flags, void* param)
 			Mat* image_proc = (Mat*)((*vec_param)[2]);
 			Mat* binMask = (Mat*)((*vec_param)[3]);
 			*image_show = image_proc->clone();
-			if (x >=0 && y >= 0 && x + candidate->cols < image_show->cols && y + candidate->rows < image_show->rows)
+			if (x >= 10 && y >= 10 && x + candidate->cols + 10 < image_show->cols && y + candidate->rows + 10 < image_show->rows)
 			{
 				candidate->copyTo((*image_show)(cv::Rect(Point(x, y), Point(x + candidate->cols, y + candidate->rows))), *binMask);
 				imshow("PoissonMatting", *image_show);
@@ -46,7 +46,7 @@ void poisson_on_mouse(int event, int x, int y, int flags, void* param)
 		py = (int*)((*vec_param)[5]);
 		auto candidate = (Mat*)((*vec_param)[0]);
 		Mat* image_show = (Mat*)((*vec_param)[1]);
-		if (x >= 0 && y >= 0 && x + candidate->cols < image_show->cols && y + candidate->rows < image_show->rows)
+		if (x >= 10 && y >= 10 && x + candidate->cols + 10 < image_show->cols && y + candidate->rows + 10 < image_show->rows)
 		{
 			*px = x;
 			*py = y;
@@ -316,13 +316,13 @@ void Photoshop::contrastStretch()
 
 void Photoshop::maskMerge(cv::Mat& des, cv::Mat& src, cv::Mat& mask)
 {
-	for (int i = 0; i < des.rows; i++)
+	for (int i = 10; i < des.rows - 10; i++)
 	{
-		for (int j = 0; j < des.cols; j++)
+		for (int j = 10; j < des.cols - 10; j++)
 		{
-			if (mask.at<unsigned char>(i, j) != 0)
+			if (mask.at<unsigned char>(i - 10, j - 10) != 0)
 			{
-				des.at<Vec3b>(i, j) = src.at<Vec3b>(i, j);
+				des.at<Vec3f>(i, j) = src.at<Vec3f>(i - 10, j - 10);
 			}
 		}
 	}
@@ -362,8 +362,6 @@ void Photoshop::poissonMatting()
 		}
 		grabCut(*candidate, mask, Rect(0, 0, candidate->cols, candidate->rows), bgdModel, fgdModel, 1);
 		Mat binMask = mask & 1;
-		Mat res;
-		candidate->copyTo(res, binMask);
 		_image_show = _image_proc.clone();
 		candidate->copyTo(_image_show(cv::Rect(Point(0, 0), Point(candidate->cols, candidate->rows))), binMask);
 		cvNamedWindow("PoissonMatting");
@@ -383,14 +381,15 @@ void Photoshop::poissonMatting()
 		cout << x << ' ' << y << endl;
 		Mat dest, destGradientX, destGradientY;
 		Mat patchGradientX, patchGradientY;
-		_image_show(cv::Rect(Point(x, y), Point(x + candidate->cols, y + candidate->rows))).copyTo(dest);
+		_image_show(cv::Rect(Point(x - 10, y - 10), Point(x + candidate->cols + 10, y + candidate->rows + 10))).copyTo(dest);
 
-		patchGradientX = Mat(candidate->size(), CV_8UC3);
-		patchGradientY = Mat(candidate->size(), CV_8UC3);
-		destGradientX = Mat(dest.size(), CV_8UC3);
-		destGradientY = Mat(dest.size(), CV_8UC3);
-		Mat test = _image_show.clone();
-		computeGradientX(_image_show, test);
+		Mat dest_wk(dest.size(), CV_32FC3);
+		dest.convertTo(dest_wk, CV_32FC3);
+
+		patchGradientX = Mat(candidate->size(), CV_32FC3);
+		patchGradientY = Mat(candidate->size(), CV_32FC3);
+		destGradientX = Mat(dest.size(), CV_32FC3);
+		destGradientY = Mat(dest.size(), CV_32FC3);
 
 		computeGradientX(*candidate, patchGradientX);
 		computeGradientY(*candidate, patchGradientY);
@@ -410,9 +409,9 @@ void Photoshop::poissonMatting()
 		Mat ans(dest.size(), CV_8UC3);
 		int pixNum = dest.rows * dest.cols;
 
-		imshow("lap", lap);
+		/*imshow("lap", lap);
 		cvWaitKey(0);
-		cvDestroyAllWindows();
+		cvDestroyAllWindows();*/
 
 		double* columnB = new double[pixNum];
 		double* pX = new double[pixNum];
@@ -452,11 +451,11 @@ void Photoshop::poissonMatting()
 					int place = i * dest.cols + j;
 					if ((i == 0) || (j == 0) || (i == (dest.rows - 1)) || (j == (dest.cols - 1)))
 					{
-						columnB[place] = dest.at<Vec3b>(i, j).val[k];
+						columnB[place] = dest_wk.at<Vec3f>(i, j).val[k];
 						//B << columnB[place] << endl;
 						continue;
 					}
-					columnB[place] = lap.at<Vec3b>(i, j).val[k];
+					columnB[place] = lap.at<Vec3f>(i, j).val[k];
 					//B << columnB[place] << endl;
 
 				}
@@ -475,7 +474,9 @@ void Photoshop::poissonMatting()
 				}
 			}
 		}
-		ans.copyTo(_image_show(cv::Rect(Point(x, y), Point(x + candidate->cols, y + candidate->rows))));
+		ans.copyTo(_image_show(cv::Rect(Point(x - 10, y - 10), Point(x + candidate->cols + 10, y + candidate->rows + 10))));
+
+		imwrite("ans.jpg", _image_show);
 		
 		delete[] columnB;
 		delete[] pX;
@@ -491,7 +492,7 @@ void Photoshop::computeGradientX(const Mat& img, Mat& gradient)
 	Mat kernel = Mat::zeros(1, 3, CV_8S);
 	kernel.at<char>(0, 2) = 1;
 	kernel.at<char>(0, 1) = -1;
-	filter2D(img, gradient, CV_8U, kernel);
+	filter2D(img, gradient, CV_32F, kernel);
 }
 
 void Photoshop::computeGradientY(const Mat& img, Mat& gradient)
@@ -499,7 +500,7 @@ void Photoshop::computeGradientY(const Mat& img, Mat& gradient)
 	Mat kernel = Mat::zeros(3, 1, CV_8S);
 	kernel.at<char>(2, 0) = 1;
 	kernel.at<char>(1, 0) = -1;
-	filter2D(img, gradient, CV_8U, kernel);
+	filter2D(img, gradient, CV_32F, kernel);
 }
 
 void Photoshop::computeLaplacianX(const cv::Mat & img, cv::Mat & laplacian)
@@ -507,7 +508,7 @@ void Photoshop::computeLaplacianX(const cv::Mat & img, cv::Mat & laplacian)
 	Mat kernel = Mat::zeros(1, 3, CV_8S);
 	kernel.at<char>(0, 0) = -1;
 	kernel.at<char>(0, 1) = 1;
-	filter2D(img, laplacian, CV_8U, kernel);
+	filter2D(img, laplacian, CV_32F, kernel);
 }
 
 void Photoshop::computeLaplacianY(const cv::Mat & img, cv::Mat & laplacian)
@@ -515,7 +516,7 @@ void Photoshop::computeLaplacianY(const cv::Mat & img, cv::Mat & laplacian)
 	Mat kernel = Mat::zeros(3, 1, CV_8S);
 	kernel.at<char>(0, 0) = -1;
 	kernel.at<char>(1, 0) = 1;
-	filter2D(img, laplacian, CV_8U, kernel);
+	filter2D(img, laplacian, CV_32F, kernel);
 }
 
 int Photoshop::SolveLinearSystemByEigen(Eigen::SparseMatrix<float>& smA, double* pColumnB, double* pX, int m_nRow, int m_nColumn)

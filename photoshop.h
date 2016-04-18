@@ -8,6 +8,7 @@
 #include <Eigen/SparseCholesky>
 #include <Eigen/SparseLU>
 
+
 class Photoshop : public QMainWindow
 {
 	Q_OBJECT
