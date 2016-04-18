@@ -5,7 +5,6 @@
 #include "ui_photoshop.h"
 #include <opencv2\opencv.hpp>
 #include <vector>
-#include <Eigen/SparseCholesky>
 #include <Eigen/SparseLU>
 
 

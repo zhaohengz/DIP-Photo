@@ -385,33 +385,33 @@ void Photoshop::poissonMatting()
 
 		Mat dest_wk(dest.size(), CV_32FC3);
 		dest.convertTo(dest_wk, CV_32FC3);
+		Mat candidate_wk(candidate->size(), CV_32FC3);
+		candidate->convertTo(candidate_wk, CV_32FC3);
 
 		patchGradientX = Mat(candidate->size(), CV_32FC3);
 		patchGradientY = Mat(candidate->size(), CV_32FC3);
 		destGradientX = Mat(dest.size(), CV_32FC3);
 		destGradientY = Mat(dest.size(), CV_32FC3);
 
-		computeGradientX(*candidate, patchGradientX);
-		computeGradientY(*candidate, patchGradientY);
-		computeGradientX(dest, destGradientX);
-		computeGradientY(dest, destGradientY);
+		computeGradientX(candidate_wk, patchGradientX);
+		computeGradientY(candidate_wk, patchGradientY);
+		computeGradientX(dest_wk, destGradientX);
+		computeGradientY(dest_wk, destGradientY);
 
 		Mat laplacianX = destGradientX.clone();
 		Mat laplacianY = destGradientY.clone();
-		maskMerge(laplacianX, patchGradientX, binMask);
-		maskMerge(laplacianY, patchGradientY, binMask);
+		Mat tempX = destGradientX.clone();
+		Mat tempY = destGradientY.clone();
+		maskMerge(tempX, patchGradientX, binMask);
+		maskMerge(tempY, patchGradientY, binMask);
 
 
-		computeLaplacianX(laplacianX, laplacianX);
-		computeLaplacianY(laplacianY, laplacianY);
+		computeLaplacianX(tempX, laplacianX);
+		computeLaplacianY(tempY, laplacianY);
 
 		Mat lap = laplacianX + laplacianY;
 		Mat ans(dest.size(), CV_8UC3);
 		int pixNum = dest.rows * dest.cols;
-
-		/*imshow("lap", lap);
-		cvWaitKey(0);
-		cvDestroyAllWindows();*/
 
 		double* columnB = new double[pixNum];
 		double* pX = new double[pixNum];
@@ -437,10 +437,7 @@ void Photoshop::poissonMatting()
 				smA.insert(place, place - 1) = 1;
 			}
 		}
-		//A << smA << endl;
 
-		//ofstream B("B.txt");
-		ofstream X("X.txt");
 		smA.makeCompressed();
 		for (int k = 0; k < 3; k++)
 		{
@@ -452,17 +449,13 @@ void Photoshop::poissonMatting()
 					if ((i == 0) || (j == 0) || (i == (dest.rows - 1)) || (j == (dest.cols - 1)))
 					{
 						columnB[place] = dest_wk.at<Vec3f>(i, j).val[k];
-						//B << columnB[place] << endl;
 						continue;
 					}
 					columnB[place] = lap.at<Vec3f>(i, j).val[k];
-					//B << columnB[place] << endl;
-
 				}
 			}
-			cout << (int)time(NULL) << endl;
+		
 			SolveLinearSystemByEigen(smA, columnB, pX, pixNum, pixNum);
-			cout << (int)time(NULL) << endl;
 
 			for (int i = 0; i < dest.rows; i++)
 			{
@@ -470,7 +463,6 @@ void Photoshop::poissonMatting()
 				{
 					int place = i * dest.cols + j;
 					ans.at<Vec3b>(i, j).val[k] = min(max(0, (int)pX[place]), 255);
-					X << pX[place] << endl;
 				}
 			}
 		}
@@ -489,34 +481,67 @@ void Photoshop::poissonMatting()
 
 void Photoshop::computeGradientX(const Mat& img, Mat& gradient)
 {
-	Mat kernel = Mat::zeros(1, 3, CV_8S);
-	kernel.at<char>(0, 2) = 1;
-	kernel.at<char>(0, 1) = -1;
-	filter2D(img, gradient, CV_32F, kernel);
+	for (int j = 0; j < img.cols; j++)
+	{
+		for (int i = 0; i < img.rows; i++)
+		{
+			if (j == img.cols - 1)
+			{
+				gradient.at<Vec3f>(i, j) = 0;
+				continue;
+			}
+			gradient.at<Vec3f>(i, j) = -img.at<Vec3f>(i, j) + img.at<Vec3f>(i, j + 1);
+		}
+	}
 }
 
 void Photoshop::computeGradientY(const Mat& img, Mat& gradient)
 {
-	Mat kernel = Mat::zeros(3, 1, CV_8S);
-	kernel.at<char>(2, 0) = 1;
-	kernel.at<char>(1, 0) = -1;
-	filter2D(img, gradient, CV_32F, kernel);
+	for (int i = 0; i < img.rows; i++)
+	{
+		for (int j = 0; j < img.cols; j++)
+		{
+			if (i == img.rows - 1)
+			{
+				gradient.at<Vec3f>(i, j) = 0;
+				continue;
+			}
+			gradient.at<Vec3f>(i, j) = -img.at<Vec3f>(i, j) + img.at<Vec3f>(i + 1, j);
+		}
+	}
 }
 
 void Photoshop::computeLaplacianX(const cv::Mat & img, cv::Mat & laplacian)
 {
-	Mat kernel = Mat::zeros(1, 3, CV_8S);
-	kernel.at<char>(0, 0) = -1;
-	kernel.at<char>(0, 1) = 1;
-	filter2D(img, laplacian, CV_32F, kernel);
+	for (int j = 0; j < img.cols; j++)
+	{
+		for (int i = 0; i < img.rows; i++)
+		{
+			if (j == 0)
+			{
+				laplacian.at<Vec3f>(i, j) = 0;
+				continue;
+			}
+			laplacian.at<Vec3f>(i, j) = img.at<Vec3f>(i, j) - img.at<Vec3f>(i, j - 1);
+		}
+	}
+
 }
 
 void Photoshop::computeLaplacianY(const cv::Mat & img, cv::Mat & laplacian)
 {
-	Mat kernel = Mat::zeros(3, 1, CV_8S);
-	kernel.at<char>(0, 0) = -1;
-	kernel.at<char>(1, 0) = 1;
-	filter2D(img, laplacian, CV_32F, kernel);
+	for (int i = 0; i < img.rows; i++)
+	{
+		for (int j = 0; j < img.cols; j++)
+		{
+			if (i == 0)
+			{
+				laplacian.at<Vec3f>(i, j) = 0;
+				continue;
+			}
+			laplacian.at<Vec3f>(i, j) = img.at<Vec3f>(i, j) - img.at<Vec3f>(i - 1, j);
+		}
+	}
 }
 
 int Photoshop::SolveLinearSystemByEigen(Eigen::SparseMatrix<float>& smA, double* pColumnB, double* pX, int m_nRow, int m_nColumn)
