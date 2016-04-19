@@ -4,9 +4,14 @@
 #include <QtWidgets/QMainWindow>
 #include "ui_photoshop.h"
 #include <opencv2\opencv.hpp>
+#include <opencv2\imgproc\imgproc.hpp>
+#include <opencv2\features2d\features2d.hpp>
+#include <opencv2\nonfree\nonfree.hpp>
+#include <opencv2/legacy/legacy.hpp>
 #include <vector>
 #include <Eigen/SparseLU>
 
+#define NN_SQ_DIST_RATIO_THR 0.49
 
 class Photoshop : public QMainWindow
 {
