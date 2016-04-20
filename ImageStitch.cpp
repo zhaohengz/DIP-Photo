@@ -38,6 +38,7 @@ void ImageStitch::exec(cv::Mat & img1, cv::Mat & img2, cv::Mat& res)
 {
 	Mat mascara;
 
+
 	sift1(img1, mascara, key_points1, descriptors1);
 	sift2(img2, mascara, key_points2, descriptors2);
 
@@ -117,10 +118,10 @@ void ImageStitch::exec(cv::Mat & img1, cv::Mat & img2, cv::Mat& res)
 		}
 	}
 
-	imshow("dfd", res);
-	cvWaitKey(0);
+//imshow("dfd", res);
+	//cvWaitKey(0);
 	imwrite("stitch.jpg", res);
-	cvDestroyAllWindows();
+	/*cvDestroyAllWindows();
 
 	namedWindow("SIFT_matches");
 	Mat img_matches;
@@ -131,7 +132,7 @@ void ImageStitch::exec(cv::Mat & img1, cv::Mat & img2, cv::Mat& res)
 		img_matches,      //匹配输出图像  
 		Scalar(255, 255, 255));     //用白色直线连接两幅图像中的特征点  
 	imshow("SIFT_matches", img_matches);
-	waitKey(0);
+	waitKey(0);*/
 }
 
 void ImageStitch::RANSAC(std::vector<cv::DMatch>& matches, double p_min, double err_max, cv::Mat & homo_matrix)

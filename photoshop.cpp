@@ -71,7 +71,10 @@ Photoshop::Photoshop(QWidget *parent)
 	connect(ui.pushButtonHistogramEqualize, SIGNAL(clicked()), this ,SLOT(histogramEqualize()));
 	connect(ui.pushButtonHistogramMatch, SIGNAL(clicked()), this, SLOT(histogramMatch()));
 	connect(ui.pushButtonPoisson, SIGNAL(clicked()), this, SLOT(poissonMatting()));
+	connect(ui.pushButtonStitch, SIGNAL(clicked()), this, SLOT(imageStitch()));
 	connect(ui.reset, SIGNAL(clicked()), this, SLOT(reset()));
+
+	_imgSti = new ImageStitch();
 }
 
 Photoshop::~Photoshop()
@@ -314,6 +317,25 @@ void Photoshop::contrastStretch()
 	contrastStretch(ui.spinBoxMinContrast->value(), ui.spinBoxMaxContrast->value());
 }
 
+void Photoshop::imageStitch()
+{
+	QString candidate_name = QFileDialog::getOpenFileName(this, tr("Select Image"), "", tr("Images (*.png *.jpg *.jpeg *.bmp)"));
+
+	if (candidate_name.isEmpty())
+	{
+		return;
+	}
+	else
+	{
+		_candidates.resize(0);
+		_candidates.push_back(cv::imread(candidate_name.toStdString().c_str()));
+		Mat* candidate = &(_candidates[0]);
+		_imgSti->exec(_image_proc, *candidate, _image_show);
+		updateImage();
+		imageOverride();
+	}
+}
+
 void Photoshop::maskMerge(cv::Mat& des, cv::Mat& src, cv::Mat& mask)
 {
 	for (int i = 10; i < des.rows - 10; i++)
@@ -330,7 +352,7 @@ void Photoshop::maskMerge(cv::Mat& des, cv::Mat& src, cv::Mat& mask)
 
 void Photoshop::poissonMatting()
 {
-	QString candidate_name = QFileDialog::getOpenFileName(this, tr("选择图像"), "", tr("Images (*.png *.jpg *.jpeg *.bmp)"));
+	QString candidate_name = QFileDialog::getOpenFileName(this, tr("Select Image"), "", tr("Images (*.png *.jpg *.jpeg *.bmp)"));
 
 	if (candidate_name.isEmpty())
 	{

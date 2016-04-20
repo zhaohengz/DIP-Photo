@@ -7,9 +7,11 @@
 #include <opencv2\imgproc\imgproc.hpp>
 #include <opencv2\features2d\features2d.hpp>
 #include <opencv2\nonfree\nonfree.hpp>
-#include <opencv2/legacy/legacy.hpp>
+#include <opencv2\legacy\legacy.hpp>
 #include <vector>
 #include <Eigen/SparseLU>
+
+#include "ImageStitch.h"
 
 #define NN_SQ_DIST_RATIO_THR 0.49
 
@@ -34,6 +36,7 @@ public slots:
 	void reset();
 	void imageOverride();
 	void contrastStretch();
+	void imageStitch();
 
 private:
 	void maskMerge(cv::Mat& des, cv::Mat& src, cv::Mat& mask);
@@ -52,6 +55,7 @@ private:
 	QString _image_name;
 	cv::Mat _origin_image, _image_proc, _image_show;
 	std::vector<cv::Mat> _candidates;
+	ImageStitch* _imgSti;
 };
 
 #endif // PHOTOSHOP_H
