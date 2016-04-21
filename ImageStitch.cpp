@@ -6,6 +6,8 @@
 using namespace cv;
 using namespace std;
 
+#define PIXEL_OVERLAP 50
+
 ImageStitch::ImageStitch()
 {
 }
@@ -95,7 +97,7 @@ void ImageStitch::exec(cv::Mat & img1, cv::Mat & img2, cv::Mat& res)
 	{
 		for (int j = 0; j < res.cols; j++)
 		{
-			if (i < img1.rows && j < img1.cols)
+			if (i < img1.rows && j < img1.cols - PIXEL_OVERLAP)
 			{
 				res.at<Vec3b>(i, j) = img1.at<Vec3b>(i, j);
 			}
@@ -108,7 +110,23 @@ void ImageStitch::exec(cv::Mat & img1, cv::Mat & img2, cv::Mat& res)
 				int v = hpt.y;
 				if (u >= 0 && u < img2.cols && v >= 0 && v < img2.rows)
 				{
-					res.at<Vec3b>(i, j) = img2.at<Vec3b>(v, u);
+					int r_floor = v;
+					int c_floor = u;
+					Vec3b temp1 = img2.at<Vec3b>(r_floor, c_floor) * (r_floor + 1 - v) + img2.at<Vec3b>(r_floor + 1, c_floor) * (v - r_floor);
+					Vec3b temp2 = img2.at<Vec3b>(r_floor, c_floor + 1) * (r_floor + 1 - v) + img2.at<Vec3b>(r_floor + 1, c_floor + 1) * (v - r_floor);
+					if (j < img1.cols)
+					{
+						Vec3f temp = temp1 * (c_floor + 1 - u) + temp2 * (u - c_floor);
+						temp = (j + PIXEL_OVERLAP - img1.cols)  * temp;
+						Vec3f img1temp = img1.at<Vec3b>(i, j);
+						img1temp = (img1.cols - j) * img1temp;
+						temp += img1temp;
+						res.at<Vec3b>(i, j) =  temp / PIXEL_OVERLAP;
+					}
+					else
+					{
+						res.at<Vec3b>(i, j) = temp1 * (c_floor + 1 - u) + temp2 * (u - c_floor);
+					}
 				}
 				else
 				{

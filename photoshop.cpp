@@ -344,7 +344,12 @@ void Photoshop::maskMerge(cv::Mat& des, cv::Mat& src, cv::Mat& mask)
 		{
 			if (mask.at<unsigned char>(i - 10, j - 10) != 0)
 			{
-				des.at<Vec3f>(i, j) = src.at<Vec3f>(i - 10, j - 10);
+				auto des_vec = des.ptr<Vec3f>(i, j);
+				auto src_vec = src.ptr<Vec3f>(i - 10, j - 10);
+				for (int k = 0; k < 3; k++)
+				{ 
+					des_vec->val[k] = max(des_vec->val[k], src_vec->val[k]);
+				}
 			}
 		}
 	}
@@ -353,6 +358,7 @@ void Photoshop::maskMerge(cv::Mat& des, cv::Mat& src, cv::Mat& mask)
 void Photoshop::poissonMatting()
 {
 	QString candidate_name = QFileDialog::getOpenFileName(this, tr("Select Image"), "", tr("Images (*.png *.jpg *.jpeg *.bmp)"));
+	QString mask_name = QFileDialog::getOpenFileName(this, tr("Seleck Mask"), "", tr("Images (*.png *.jpg *.jpeg *.bmp)"));
 
 	if (candidate_name.isEmpty())
 	{
@@ -362,28 +368,24 @@ void Photoshop::poissonMatting()
 	{
 		_candidates.resize(0);
 		_candidates.push_back(cv::imread(candidate_name.toStdString().c_str()));
+		_candidates.push_back(cv::imread(mask_name.toStdString().c_str(), CV_8UC1));
 		Mat* candidate = &(_candidates[0]);
-		Mat bgdModel, fgdModel, mask;
-		mask = cvCreateMat(candidate->rows, candidate->cols, CV_8UC1);
-		mask.setTo(GC_PR_FGD);
-		for (int i = 0; i < 0.1 * mask.rows; i++)
+		Mat* mask = &(_candidates[1]);
+		Mat binMask(mask->size(), CV_8UC1);
+		for (int i = 0; i < binMask.rows; i++)
 		{
-			for (int j = 0; j < mask.cols; j++)
+			for (int j = 0; j < binMask.cols; j++)
 			{
-				mask.at<unsigned char>(i, j) = GC_PR_BGD;
+				if (mask->at<unsigned char>(i, j) > 200)
+				{
+					binMask.at<unsigned char>(i, j) = 1;
+				}
+				else
+				{
+					binMask.at<unsigned char>(i, j) = 0;
+				}
 			}
 		}
-
-		for (int i = 0; i < mask.rows; i++)
-		{
-			for (int j = 0; j < 0.1 * mask.cols; j++)
-			{
-				mask.at<unsigned char>(i, j) = GC_PR_BGD;
-				mask.at<unsigned char>(i, mask.cols - j - 1) = GC_PR_BGD;
-			}
-		}
-		grabCut(*candidate, mask, Rect(0, 0, candidate->cols, candidate->rows), bgdModel, fgdModel, 1);
-		Mat binMask = mask & 1;
 		_image_show = _image_proc.clone();
 		candidate->copyTo(_image_show(cv::Rect(Point(0, 0), Point(candidate->cols, candidate->rows))), binMask);
 		cvNamedWindow("PoissonMatting");
@@ -396,11 +398,10 @@ void Photoshop::poissonMatting()
 		params.push_back((void*)&x);
 		params.push_back((void*)&y);
 		cvSetMouseCallback("PoissonMatting", poisson_on_mouse, (void*)(&params));
-		imshow("PoissonMatting", _image_show);
+		cv::imshow("PoissonMatting", _image_show);
 		cvWaitKey(0);
 		cvDestroyWindow("PoissonMatting");
 
-		cout << x << ' ' << y << endl;
 		Mat dest, destGradientX, destGradientY;
 		Mat patchGradientX, patchGradientY;
 		_image_show(cv::Rect(Point(x - 10, y - 10), Point(x + candidate->cols + 10, y + candidate->rows + 10))).copyTo(dest);
